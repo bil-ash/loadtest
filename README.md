@@ -603,6 +603,25 @@ will be:
 * ...
 * body will also be replaced `body:{ userid: id_value }` will be `body:{ userid: id_1 }`
 
+#### `indexParamCallback`
+
+A function that would be executed to replace the value identified through `indexParam` through a custom value generator.
+
+E.g.: if URL is `http://test.com/value` and `indexParam=value` and
+```javascript
+indexParamCallback: function customCallBack() {
+  return Math.floor(Math.random() * 10); //returns a random integer from 0 to 9
+}
+``` 
+then the URL could be:
+
+* http://test.com/1 (Randomly generated integer 1)
+* http://test.com/5 (Randomly generated integer 5)
+* http://test.com/6 (Randomly generated integer 6)
+* http://test.com/8 (Randomly generated integer 8)
+* ...
+* body will also be replaced `body:{ userid: id_value }` will be `body:{ userid: id_<value from callback> }`
+
 #### `insecure`
 
 Allow invalid and self-signed certificates over https.
@@ -632,7 +651,7 @@ loadtest.loadTest(options, function(error) {
 
 #### `statusCallback`
 
-Execution this function after every request operation completes. Provides immediate access to test results while the
+If present, this function executes after every request operation completes. Provides immediate access to test results while the
 test batch is still running. This can be used for more detailed custom logging or developing your own spreadsheet or
 statistical analysis of results.
 
@@ -673,6 +692,31 @@ loadtest.loadTest(options, function(error) {
 });
 ```
 
+ 
+In some situations request data needs to be available in the statusCallBack.
+This data can be assigned to `request.labels` in the requestGenerator:
+```javascript
+const options = {
+	// ...
+	requestGenerator: (params, options, client, callback) => {
+		// ...
+        const randomInputData = Math.random().toString().substr(2, 8);
+        const message = JSON.stringify({ randomInputData })
+		const request = client(options, callback);
+        request.labels = randomInputData;
+		request.write(message);
+		return request;
+	}
+};
+```
+
+Then in statusCallBack the labels can be accessed through `result.labels`:
+```javascript
+function statusCallback(error, result, latency) {
+    console.log(result.labels);
+}
+```
+
 **Warning**: The format for `statusCallback` has changed in version 2.0.0 onwards.
 It used to be `statusCallback(latency, result, error)`,
 it has been changed to conform to the usual Node.js standard.
@@ -690,7 +734,7 @@ The `result` object passed to this callback function has the same fields as the 
 Example:
 
 ```javascript
-fucntion contentInspector (result) => {
+function contentInspector(result) {
     if (result.statusCode == 200) {
         const body = JSON.parse(result.body)
         // how to examine the body depends on the content that the service returns
