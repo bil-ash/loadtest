@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark light">
+<title>Web Video Encoder Hardware Acceleration Test</title>
+<style>
+  :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif;line-height:1.45;color:#16181d;background:#f5f7fa}
+  @media(prefers-color-scheme:dark){:root{color:#e8eaed;background:#0e1116}}
+  body{margin:0}.wrap{max-width:1120px;margin:0 auto;padding:28px 18px 44px}
+  h1{margin:0 0 8px;font-size:clamp(26px,4vw,38px);letter-spacing:-.02em}h2{font-size:18px;margin:28px 0 12px}
+  p{margin:8px 0}.sub{color:#60656f}@media(prefers-color-scheme:dark){.sub{color:#a8adb8}}
+  .card{background:#fff;border:1px solid #dfe4ea;border-radius:14px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-top:16px}
+  @media(prefers-color-scheme:dark){.card{background:#151a22;border-color:#2b313b;box-shadow:none}}
+  .controls{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;align-items:end}
+  label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:650}
+  input,select,button{font:inherit}input,select{padding:9px 10px;border:1px solid #cbd2da;border-radius:9px;background:inherit;color:inherit}
+  button{padding:10px 14px;border:0;border-radius:9px;background:#1667d9;color:white;font-weight:750;cursor:pointer}button.secondary{background:#596273}button:disabled{opacity:.55;cursor:not-allowed}
+  .actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:13px}.note{font-size:13px;color:#636a74;margin-top:10px}@media(prefers-color-scheme:dark){.note{color:#aab0ba}}
+  table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px 8px;border-bottom:1px solid #e6eaf0;text-align:left;vertical-align:top}@media(prefers-color-scheme:dark){th,td{border-color:#2a3039}}
+  th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:#66707c}.pill{display:inline-block;padding:3px 8px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}
+  .ok{background:#dff6e5;color:#11652f}.bad{background:#fde1e1;color:#8e1a1a}.warn{background:#fff0c7;color:#7a5500}.muted{background:#e9edf2;color:#53606f}
+  @media(prefers-color-scheme:dark){.ok{background:#103c21;color:#8ce0a7}.bad{background:#4a1a1a;color:#ffaaa9}.warn{background:#493d16;color:#f4d47b}.muted{background:#252c35;color:#aeb8c5}}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;font-size:12px;word-break:break-all}.kv{display:grid;grid-template-columns:190px 1fr;gap:6px 14px;font-size:13px}
+  .kv b{color:#596273}@media(prefers-color-scheme:dark){.kv b{color:#aeb7c4}}progress{width:100%;height:10px}
+  .log{max-height:240px;overflow:auto;white-space:pre-wrap;background:#10141a;color:#dce5ef;padding:12px;border-radius:10px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .center{display:flex;align-items:center;gap:8px}.small{font-size:12px}@media(max-width:760px){.controls{grid-template-columns:repeat(2,minmax(130px,1fr))}.kv{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Web Video Encoder Hardware Acceleration Test</h1>
+  <p class="sub">WebCodecs encoder test for H.264, H.265/HEVC, VP8, VP9 and AV1.</p>
+  <section class="card">
+    <div class="controls">
+      <label>Width<input id="width" type="number" min="64" step="16" value="1280"></label>
+      <label>Height<input id="height" type="number" min="64" step="16" value="720"></label>
+      <label>Frames<input id="frames" type="number" min="1" max="600" step="1" value="60"></label>
+      <label>Bitrate (Mbps)<input id="bitrate" type="number" min="0.1" step="0.1" value="4"></label>
+    </div>
+    <div class="actions">
+      <button id="supportBtn">Check codec support</button>
+      <button id="runBtn">Run hardware-preferred encodes</button>
+      <button id="softwareBtn" class="secondary">Run software-preferred encodes</button>
+      <button id="clearBtn" class="secondary">Clear results</button>
+    </div>
+    <p class="note">This page runs locally in your browser. “Hardware preferred” means the browser accepted the WebCodecs hardware-acceleration hint; it does not prove the driver actually used a hardware encoder.</p>
+  </section>
+  <section class="card">
+    <h2>Browser / platform</h2>
+    <div class="kv">
+      <b>User agent</b><span id="ua" class="mono"></span><b>WebCodecs</b><span id="webcodecs"></span>
+      <b>Secure context</b><span id="secure"></span><b>WebGL GPU hint</b><span id="gpu" class="mono"></span>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Results</h2><div class="center small"><span id="overall">Ready.</span></div>
+    <div style="overflow:auto;margin-top:10px"><table id="resultsTable"><thead><tr><th>Codec</th><th>Codec strings tested</th><th>HW config</th><th>SW config</th><th>HW-preferred encode</th><th>SW-preferred encode</th><th>HW-preferred FPS</th></tr></thead><tbody></tbody></table></div>
+  </section>
+  <section class="card">
+    <h2>Interpretation</h2>
+    <p><span class="pill ok">PASS</span> <b>Supported</b>: <code>VideoEncoder.isConfigSupported()</code> accepted the configuration.</p>
+    <p><span class="pill ok">PASS</span> <b>Encode completed</b>: actual frames were sent through <code>VideoEncoder</code> and output chunks were produced.</p>
+    <p><span class="pill warn">HINT</span> <b>Hardware preference</b>: WebCodecs was asked for <code>prefer-hardware</code>. The API intentionally does not expose a standardized “hardware encoder used” boolean.</p>
+    <p><span class="pill bad">FAIL</span> <b>Unsupported/error</b>: the browser could not accept or run that codec/configuration.</p>
+  </section>
+  <section class="card"><h2>Activity log</h2><div id="log" class="log">Ready.</div></section>
+</div>
+<script>
+(()=>{'use strict';
+const CODECS=[
+{name:'H.264 / AVC',candidates:['avc1.42001E','avc1.4D0028','avc1.640028']},
+{name:'H.265 / HEVC',candidates:['hvc1.1.6.L93.B0','hev1.1.6.L93.B0']},
+{name:'VP8',candidates:['vp8']},
+{name:'VP9',candidates:['vp09.00.10.08','vp09.00.10.08.00']},
+{name:'AV1',candidates:['av01.0.04M.08','av01.0.05M.08']}];
+const $=id=>document.getElementById(id),tbody=$('resultsTable').querySelector('tbody');let results=new Map();
+$('ua').textContent=navigator.userAgent;$('webcodecs').innerHTML=typeof VideoEncoder==='function'?'<span class="pill ok">Available</span>':'<span class="pill bad">Unavailable</span>';$('secure').innerHTML=window.isSecureContext?'<span class="pill ok">Yes</span>':'<span class="pill bad">No</span>';
+function log(msg){const now=new Date().toLocaleTimeString();$('log').textContent+=`\n[${now}] ${msg}`;$('log').scrollTop=$('log').scrollHeight}
+async function gpuHint(){try{const c=document.createElement('canvas'),gl=c.getContext('webgl')||c.getContext('experimental-webgl');if(!gl)return'WebGL unavailable';const ext=gl.getExtension('WEBGL_debug_renderer_info');if(!ext)return'Renderer string hidden by browser privacy settings';return `${gl.getParameter(ext.UNMASKED_VENDOR_WEBGL)} — ${gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)}`}catch(e){return'GPU hint unavailable'}}gpuHint().then(v=>$('gpu').textContent=v);
+function params(){return{width:Math.max(64,Number($('width').value)||1280),height:Math.max(64,Number($('height').value)||720),frames:Math.min(600,Math.max(1,Number($('frames').value)||60)),bitrate:Math.max(1e5,(Number($('bitrate').value)||4)*1e6)}}
+function cfg(codec,accel,p){return{codec,width:p.width,height:p.height,bitrate:p.bitrate,framerate:30,latencyMode:'realtime',hardwareAcceleration:accel}}
+async function choose(def,accel,p){const tried=[];if(typeof VideoEncoder!=='function')return{supported:false,tried,reason:'VideoEncoder unavailable'};for(const codec of def.candidates){tried.push(codec);try{const s=await VideoEncoder.isConfigSupported(cfg(codec,accel,p));if(s.supported)return{supported:true,codec,config:s.config||cfg(codec,accel,p),tried}}catch(e){log(`${def.name} ${accel} ${codec}: support error: ${e.message||e}`)}}return{supported:false,tried,reason:'No candidate accepted'}}
+function status(k,x=''){if(k===true)return`<span class="pill ok">PASS</span>${x?`<br><span class="small">${x}</span>`:''}`;if(k===false)return`<span class="pill bad">FAIL</span>${x?`<br><span class="small">${x}</span>`:''}`;return'<span class="pill muted">—</span>'}
+function render(){tbody.innerHTML='';for(const d of CODECS){const r=results.get(d.name)||{},hw=r.hwSupport,sw=r.swSupport,hr=r.hwRun,sr=r.swRun,tr=document.createElement('tr');tr.innerHTML=`<td><b>${d.name}</b></td><td class="mono">${(r.codecHw||r.codecSw||d.candidates).join('<br>')}</td><td>${hw?status(hw.supported,hw.codec||''):'—'}</td><td>${sw?status(sw.supported,sw.codec||''):'—'}</td><td>${hr?status(hr.ok,hr.message):'—'}</td><td>${sr?status(sr.ok,sr.message):'—'}</td><td>${hr&&hr.ok?hr.fps.toFixed(1):'—'}</td>`;tbody.appendChild(tr)}}
+async function check(){if(typeof VideoEncoder!=='function'){$('overall').innerHTML='<span class="pill bad">VideoEncoder unavailable</span>';return}const p=params();$('overall').textContent='Checking support…';log(`Support test at ${p.width}×${p.height}, ${p.bitrate/1e6} Mbps.`);for(const d of CODECS){const hw=await choose(d,'prefer-hardware',p),sw=await choose(d,'prefer-software',p),r=results.get(d.name)||{};r.hwSupport=hw;r.swSupport=sw;r.codecHw=hw.tried;r.codecSw=sw.tried;results.set(d.name,r);log(`${d.name}: HW=${hw.supported?hw.codec:'no'}; SW=${sw.supported?sw.codec:'no'}`);render()}$('overall').innerHTML='<span class="pill ok">Support checks complete</span>'}
+function canvas(width,height,i){const c=document.createElement('canvas');c.width=width;c.height=height;const x=c.getContext('2d',{alpha:false});const t=i/30;x.fillStyle='#0b1220';x.fillRect(0,0,width,height);const g=x.createLinearGradient(0,0,width,height);g.addColorStop(0,'#2c7be5');g.addColorStop(.5,'#7c4dff');g.addColorStop(1,'#18b89b');x.fillStyle=g;x.fillRect(0,0,width,height);x.globalAlpha=.35;for(let y=0;y<height;y+=32){x.fillStyle=y%64?'#fff':'#000';x.fillRect(0,y,width,16)}x.globalAlpha=1;x.fillStyle='#fff';x.font=`${Math.max(18,Math.floor(width/28))}px system-ui,sans-serif`;x.fillText('WebCodecs hardware test',Math.floor(width*.05),Math.floor(height*.15));x.font=`${Math.max(16,Math.floor(width/36))}px ui-monospace,monospace`;x.fillText(`frame ${i}   t=${t.toFixed(2)}s`,Math.floor(width*.05),Math.floor(height*.23));x.strokeStyle='rgba(255,255,255,.8)';x.lineWidth=Math.max(2,Math.floor(width/320));const px=((Math.sin(t*1.7)+1)/2)*(width*.7)+width*.1,py=((Math.cos(t*1.3)+1)/2)*(height*.55)+height*.2;x.beginPath();x.arc(px,py,Math.max(10,Math.min(width,height)/14),0,Math.PI*2);x.stroke();return c}
+async function encode(def,accel,p,support){if(!support||!support.supported)return{ok:false,message:'unsupported'};let chunks=0,bytes=0,error='';let enc;try{enc=new VideoEncoder({output(c){chunks++;bytes+=c.byteLength},error(e){error=e?.message||String(e)}});enc.configure(cfg(support.codec,accel,p));const start=performance.now();for(let i=0;i<p.frames;i++){const f=new VideoFrame(canvas(p.width,p.height,i),{timestamp:Math.round(i*(1e6/30))});enc.encode(f,{keyFrame:i===0});f.close();if(enc.encodeQueueSize>8)await new Promise(r=>enc.addEventListener('dequeue',r,{once:true}))}await enc.flush();const elapsed=performance.now()-start,fps=p.frames/(elapsed/1000),size=(bytes/1024/1024).toFixed(2);enc.close();if(error)return{ok:false,message:error};return{ok:true,fps,message:`${chunks} chunks, ${size} MiB`}}catch(e){try{enc?.close()}catch(_){}return{ok:false,message:e?.message||String(e)}}}
+async function runAll(accel){if(typeof VideoEncoder!=='function'){$('overall').innerHTML='<span class="pill bad">VideoEncoder unavailable</span>';return}const p=params();$('overall').textContent=`Running ${accel} encodes…`;log(`Encode run (${accel}) started: ${p.width}×${p.height}, ${p.frames} frames.`);for(const d of CODECS){const r=results.get(d.name)||{};if(accel==='prefer-hardware'?!r.hwSupport:!r.swSupport){const s=await choose(d,accel,p);if(accel==='prefer-hardware')r.hwSupport=s;else r.swSupport=s}const s=accel==='prefer-hardware'?r.hwSupport:r.swSupport;if(s.supported){log(`${d.name}: encoding with ${s.codec} (${accel})…`);const run=await encode(d,accel,p,s);if(accel==='prefer-hardware')r.hwRun=run;else r.swRun=run;log(`${d.name}: ${run.ok?`PASS ${run.fps.toFixed(1)} fps`:`FAIL ${run.message}`}`)}else{const run={ok:false,message:'unsupported'};if(accel==='prefer-hardware')r.hwRun=run;else r.swRun=run;log(`${d.name}: skipped (${accel} unsupported).`)}results.set(d.name,r);render()}$('overall').innerHTML='<span class="pill ok">Encode run complete</span>'}
+$('supportBtn').onclick=check;$('runBtn').onclick=()=>runAll('prefer-hardware');$('softwareBtn').onclick=()=>runAll('prefer-software');$('clearBtn').onclick=()=>{results=new Map();tbody.innerHTML='';$('overall').textContent='Ready.';$('log').textContent='Ready.'};render();if(typeof VideoEncoder==='function')check();
+})();
+</script>
+</body>
+</html>
